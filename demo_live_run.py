@@ -104,6 +104,9 @@ def main():
 
         out = pipeline.process_point_cloud(x, y, z, intensity=intensity)
 
+        if fi < args.start_frame and fi % 50 == 0:
+            print(f"  ...разгон: кадр {fi}/{args.start_frame}", flush=True)
+
         if fi >= args.start_frame:
             if out["obstacle_detected"]:
                 print(f"[КАДР {fi:5d}] \033[91m ПРЕПЯТСТВИЕ НА ПУТИ! \033[0m "
