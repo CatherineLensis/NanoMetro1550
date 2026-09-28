@@ -133,7 +133,7 @@ def main():
                 ax.set_aspect("equal")
                 tmp_path = os.path.join(args.live_viz_dir, "live.png.tmp")
                 final_path = os.path.join(args.live_viz_dir, "live.png")
-                fig.savefig(tmp_path, dpi=100)
+                fig.savefig(tmp_path, dpi=100, format="png")
                 os.replace(tmp_path, final_path)  # атомарная замена -- вьюер не увидит "половину" файла
 
         # пейсинг: быстрая перемотка до start-frame, целевая скорость после
