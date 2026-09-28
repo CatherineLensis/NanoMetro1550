@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  metro_obstacle_detector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: metro_detector_node
+    network_mode: "host"
+    ipc: "host"
+    privileged: true
+    environment:
+      - ROS_DOMAIN_ID=0
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /media:/media:ro
+      - ./data:/app/data
+    command: >
+      bash -c "source /opt/ros/humble/setup.bash &&
+               python3 -m hybrid_clearance_solution.ros2_detector_node"

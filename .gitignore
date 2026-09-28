@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+
+# Reference material used while building this package (not part of the shipped solution)
+reference_code/
+
+# Local validation data (large CSVs, not needed to run/build the package)
+data/*.csv
+data/*.npz
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
