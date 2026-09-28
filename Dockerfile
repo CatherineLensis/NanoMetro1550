@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-rosbag2-storage-mcap \
     ros-humble-sensor-msgs \
     ros-humble-visualization-msgs \
+    ros-humble-foxglove-bridge \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -27,7 +28,7 @@ WORKDIR /app
 # Копирование исходных кодов и обученных моделей
 COPY . /app/hybrid_clearance_solution
 
-ENV PYTHONPATH="/app:${PYTHONPATH}"
+ENV PYTHONPATH="/app"
 
 # Скрипт запуска по умолчанию
 CMD ["bash", "-c", "source /opt/ros/humble/setup.bash && python3 -m hybrid_clearance_solution.ros2_detector_node"]
