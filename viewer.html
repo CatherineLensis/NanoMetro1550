@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Project 14 — живая визуализация облака точек</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; background: #111; color: #ddd;
+         margin: 0; padding: 16px; text-align: center; }
+  h1 { font-size: 16px; font-weight: 500; color: #999; margin: 0 0 12px; }
+  img { max-width: 100%; max-height: 90vh; border: 1px solid #333; background: #fff; }
+  #status { font-size: 12px; color: #666; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>Project 14 — облако точек в реальном времени (demo_live_run.py --live-viz-dir)</h1>
+<img id="frame" src="live.png" alt="ожидание первого кадра...">
+<div id="status">обновление каждые 300мс</div>
+<script>
+  const img = document.getElementById('frame');
+  const status = document.getElementById('status');
+  let n = 0;
+  setInterval(() => {
+    const next = new Image();
+    next.onload = () => { img.src = next.src; n++; status.textContent = `кадров получено: ${n}`; };
+    next.onerror = () => {}; // файл ещё не создан / пишется -- пропускаем тик
+    next.src = 'live.png?t=' + Date.now();
+  }, 300);
+</script>
+</body>
+</html>

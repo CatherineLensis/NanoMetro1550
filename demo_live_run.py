@@ -9,8 +9,15 @@ bag читается напрямую, а не через топик ROS 2, чт
 На целевом стенде (нативный Ubuntu, п.3.1 ТЗ) эта проблема, как правило, не
 возникает -- там для демонстрации можно использовать штатный
 `ros2 bag play` + `ros2_detector_node.py` + RViz2/Foxglove напрямую.
+
+Опционально (--live-viz-dir) пишет текущий кадр облака точек как PNG в
+указанную папку в реальном времени -- см. viewer.html рядом с этим файлом:
+откройте его в браузере, указав ту же папку, для живой визуализации, идущей
+синхронно с логом в терминале (без RViz2/Foxglove, требование ТЗ п.4 про
+демонстрацию в реальном времени).
 """
 import argparse
+import os
 import sqlite3
 import sys
 import time
@@ -45,8 +52,26 @@ def main():
     ap.add_argument("--fast-forward-rate", type=float, default=None,
                      help="скорость проигрывания ДО --start-frame (по умолчанию = --rate, "
                           "можно поставить выше, чтобы быстрее промотать разогрев без искажения state)")
+    ap.add_argument("--live-viz-dir", type=str, default=None,
+                     help="папка (обычно смонтированная с хоста), куда писать live.png на каждом кадре "
+                          ">= --start-frame -- открой viewer.html из той же папки в браузере")
     args = ap.parse_args()
     ff_rate = args.fast_forward_rate or args.rate
+
+    live_viz = None
+    if args.live_viz_dir:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        os.makedirs(args.live_viz_dir, exist_ok=True)
+        fig, ax = plt.subplots(figsize=(6, 9), facecolor="white")
+        live_viz = (plt, fig, ax)
+        # кладём viewer.html рядом, если его там ещё нет
+        viewer_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer.html")
+        viewer_dst = os.path.join(args.live_viz_dir, "viewer.html")
+        if os.path.exists(viewer_src) and not os.path.exists(viewer_dst):
+            with open(viewer_src, "r", encoding="utf-8") as f_in, open(viewer_dst, "w", encoding="utf-8") as f_out:
+                f_out.write(f_in.read())
 
     pipeline = HybridPerceptionPipeline()
     con = sqlite3.connect(f"file:{args.bag_db3}?mode=ro", uri=True)
@@ -54,7 +79,11 @@ def main():
     cur.execute("SELECT data FROM messages ORDER BY id;")
 
     print(f"=== Project 14: hybrid_clearance_solution — живое проигрывание {args.bag_db3} ===")
-    print(f"=== Скорость: x{args.rate}, реальный интервал между кадрами лидара ~0.1с ===\n")
+    print(f"=== Скорость: x{args.rate}, реальный интервал между кадрами лидара ~0.1с ===")
+    if live_viz:
+        print(f"=== Живая визуализация: {os.path.join(args.live_viz_dir, 'live.png')} "
+              f"(открой viewer.html в браузере) ===")
+    print()
 
     if args.start_frame > 0:
         print(f"(разгоняю детектор через кадры 0-{args.start_frame - 1} на x{ff_rate} "
@@ -82,6 +111,30 @@ def main():
                       f"Задержка: {out['latency_ms']:.1f} мс ({out['fps']:.1f} FPS)")
             else:
                 print(f"[КАДР {fi:5d}] чисто | {len(x)} точек | Задержка: {out['latency_ms']:.1f} мс", end="\r")
+
+            if live_viz:
+                plt_mod, fig, ax = live_viz
+                ax.clear()
+                valid = np.isfinite(x) & np.isfinite(y) & np.isfinite(z) & ((x*x + y*y + z*z) > 0.09)
+                bg_idx = np.flatnonzero(valid)[::6]
+                ax.scatter(x[bg_idx], y[bg_idx], s=1.5, c="#B0B0B0", linewidths=0)
+                for b in out["confirmed_boxes"]:
+                    from matplotlib.patches import Rectangle
+                    rect = Rectangle((b["x"] - b["size_x"] / 2, b["y"] - b["size_y"] / 2),
+                                      b["size_x"], b["size_y"], linewidth=2,
+                                      edgecolor="#E8383D", facecolor="#E8383D", alpha=0.35)
+                    ax.add_patch(rect)
+                ax.set_xlim(-6, 6); ax.set_ylim(-40, 2)
+                ax.set_xlabel("X, м (поперёк)"); ax.set_ylabel("Y, м (вдоль пути)")
+                status = (f"ОБНАРУЖЕНО: {out['hazard_type']} @ {out['obstacle_distance']:.1f} м"
+                          if out["obstacle_detected"] else "чисто")
+                color = "#B00020" if out["obstacle_detected"] else "#1B7A3E"
+                ax.set_title(f"кадр {fi}\n{status}", fontsize=12, color=color, fontweight="bold")
+                ax.set_aspect("equal")
+                tmp_path = os.path.join(args.live_viz_dir, "live.png.tmp")
+                final_path = os.path.join(args.live_viz_dir, "live.png")
+                fig.savefig(tmp_path, dpi=100)
+                os.replace(tmp_path, final_path)  # атомарная замена -- вьюер не увидит "половину" файла
 
         # пейсинг: быстрая перемотка до start-frame, целевая скорость после
         rate = ff_rate if fi < args.start_frame else args.rate
