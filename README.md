@@ -244,36 +244,88 @@
 ### 5.1. Сборка Docker-образа
 ```bash
 cd hybrid_clearance_solution
-docker build -t metro_lidar_detector:latest .
+docker build -t nanometro1550:latest .
 ```
+Сборка полностью автономна — все зависимости (ROS 2 Humble, RViz2, Foxglove
+Bridge, numpy/scipy/pandas/sklearn) ставятся внутри образа, ничего вручную
+доустанавливать не нужно. На чистой сети занимает 1-2 минуты.
 
-### 5.2. Запуск контейнера
+### 5.2. Запуск контейнера (боевой режим — подписка на реальный топик лидара)
 ```bash
 docker run -it --rm \
     --net=host \
     --ipc=host \
     -v /media:/media:ro \
-    metro_lidar_detector:latest
+    nanometro1550:latest
 ```
-
-Или через `docker-compose`:
+По умолчанию (`CMD` в `Dockerfile`) запускается ROS 2 узел
+`ros2_detector_node.py`, подписанный на топик `/hesai/pandar_points`. Имя
+топика можно переопределить (см. §4.4/§4.5 документации решения):
 ```bash
-docker-compose up
+docker run -it --rm --net=host --ipc=host nanometro1550:latest \
+    bash -c "source /opt/ros/humble/setup.bash && \
+             python3 -m hybrid_clearance_solution.ros2_detector_node \
+             --ros-args -p lidar_topic:=/lidar_points"
 ```
+Или через `docker-compose up`.
 
-### 5.3. Запуск верификационных тестов
-```bash
-python -m hybrid_clearance_solution.test_and_verify
-```
+**Важно про `--net=host`/`--ipc=host`:** на нативном Ubuntu (целевой стенд,
+п.3.1 ТЗ) это штатный режим для ROS 2. **На Windows (Docker Desktop) он
+может не спасать** — при тестировании обнаружено, что крупные (~4.9 МБ)
+сообщения `PointCloud2` (128-лучевой лидар) не проходят через DDS
+(проверены и Fast-DDS, и Cyclone DDS) в виртуализированной сети Docker
+Desktop, даже с `--net=host`/`--ipc=host` и увеличенными буферами — при
+этом маленькие ROS 2-сообщения передаются нормально, узел стартует и
+корректно подписывается. Похоже на артефакт именно WSL2/Docker Desktop,
+не баг решения. Для локальной проверки на Windows см. §5.5 ниже.
 
-### 5.4. Запуск ROS 2 узла детекции
-Пакет не зарегистрирован как ROS 2 colcon-пакет (нет `package.xml`/`setup.py`),
-поэтому узел запускается как Python-модуль — именно так это сделано в `CMD`
-самого `Dockerfile`:
+### 5.3. Проверка образа: верификационные тесты (12 сценариев)
 ```bash
-python3 -m hybrid_clearance_solution.ros2_detector_node \
-    --ros-args -p lidar_topic:=/hesai/pandar_points -p frame_id:=hesai_lidar
+docker run --rm nanometro1550:latest \
+    bash -c "source /opt/ros/humble/setup.bash && cd /app && \
+             python3 -m hybrid_clearance_solution.test_and_verify"
 ```
+Не зависит от ROS 2-топиков и сети — надёжный быстрый способ убедиться,
+что образ собран правильно (ожидаемый результат: 12/12 PASS).
+
+### 5.4. Демонстрация на контрольном bag-файле (нативный Ubuntu)
+```bash
+# терминал 1: узел детекции
+docker run -it --rm --net=host --ipc=host nanometro1550:latest \
+    bash -c "source /opt/ros/humble/setup.bash && \
+             python3 -m hybrid_clearance_solution.ros2_detector_node \
+             --ros-args -p lidar_topic:=<имя_топика_из_bag>"
+
+# терминал 2: проигрывание bag-файла (тем же способом можно смотреть в RViz2/Foxglove)
+docker exec -it <container_id> bash -c \
+    "source /opt/ros/humble/setup.bash && ros2 bag play /path/to/bag"
+```
+Результат — публикация в `/metro/obstacle_detected`, `/metro/obstacle_distance`,
+`/metro/threat_level`, `/metro/obstacle_markers` (видно в `ros2 topic echo`
+или в RViz2/Foxglove Studio), плюс лог в консоли узла при обнаружении:
+`ПРЕПЯТСТВИЕ НА ПУТИ! Дистанция: X м | Тип: Y | Задержка: Z мс`.
+
+### 5.5. Локальная демонстрация без ROS 2-топиков (Windows/Docker Desktop)
+Из-за ограничения §5.2, для локальной проверки/записи демо на Windows
+используйте `demo_live_run.py` — тот же самый пакет и тот же
+`HybridPerceptionPipeline`, что и в `ros2_detector_node.py`, но кадры
+читаются из bag-файла напрямую (без ROS 2-топиков), с тем же форматом
+консольного лога:
+```bash
+docker run -d --name metro_demo \
+    -v "/путь/к/папке/с/bag:/data/bag:ro" \
+    nanometro1550:latest bash -c "sleep 86400"
+
+docker exec -it metro_demo bash -c \
+    "source /opt/ros/humble/setup.bash && \
+     python3 /app/hybrid_clearance_solution/demo_live_run.py \
+     /data/bag/<имя_файла>.db3 --rate 1"
+```
+`--start-frame N` — показывать вывод только начиная с кадра N (детектор
+всё равно honestly обрабатывает все кадры с начала — он stateful, пропуск
+обработки исказил бы результат); `--fast-forward-rate` — ускорить
+"разогрев" до `--start-frame`; `--rate` — скорость показа (1.0 = реальное
+время ~10 Гц).
 
 ---
 
