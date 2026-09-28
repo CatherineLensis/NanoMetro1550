@@ -215,7 +215,7 @@
 
 ### 5.2. Восстановление Fix 5 (Guard Rail Limiter Exclusion)
 * В `tier1_curvilinear_detector.py` восстановлен Fix 5 из референсного v3 детектора:
-  $$\text{in\_guard\_rail\_zone} = (|dx| \in [0.8, 2.0]\text{ м}) \land (dz \in [0.0, 0.6]\text{ м})$$
+  Условие `in_guard_rail_zone`: $(|dx| \in [0.8, 2.0]\text{ м}) \land (dz \in [0.0, 0.6]\text{ м})$
   Это полностью устранило перманентные ложные срабатывания на контррельс в кривых участках пути (класс 10 в KatLab).
 
 ### 5.3. Ликвидация дробления кластеров на микро-боксы (Connected Components Voxel Graph)
