@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-scipy \
     python3-pandas \
     python3-sklearn \
+    python3-matplotlib \
     ros-humble-rviz2 \
     ros-humble-rosbag2 \
     ros-humble-rosbag2-storage-mcap \
